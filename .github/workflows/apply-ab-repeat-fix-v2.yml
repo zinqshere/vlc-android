@@ -1,0 +1,83 @@
+name: Apply A-B Repeat Persistence Fix v2
+
+on:
+  push:
+    branches:
+      - feature/persist-ab-repeat
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: feature/persist-ab-repeat
+
+      - name: Apply source fix
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('application/vlc-android/src/org/videolan/vlc/media/PlaylistManager.kt')
+          s = p.read_text()
+
+          pattern = re.compile(r'(?ms)^(?P<i>[ \t]*)val abStart = if \(settings\.getBoolean\(PLAYBACK_HISTORY, true\)\).*?META_AB_REPEAT_START.*?\n(?P=i)if \(abStart != 0L\) \{.*?\n(?P=i)\}')
+          m = pattern.search(s)
+          if not m:
+              raise SystemExit('A-B load block not found')
+          i = m.group('i')
+          replacement = (
+              f'{i}// A-B repeat is stored per media. Reset the in-memory state first.\\n'
+              f'{i}abRepeat.value = ABRepeat()\\n'
+              f'{i}abRepeatOn.value = false\\n'
+              f'{i}val abStart = if (settings.getBoolean(PLAYBACK_HISTORY, true)) media.getMetaLong(MediaWrapper.META_AB_REPEAT_START) else 0L\\n'
+              f'{i}if (abStart != 0L) {{\\n'
+              f'{i}    abRepeatOn.value = true\\n'
+              f'{i}    val abStop = media.getMetaLong(MediaWrapper.META_AB_REPEAT_STOP)\\n'
+              f'{i}    abRepeat.postValue(ABRepeat(abStart, if (abStop == 0L) -1L else abStop))\\n'
+              f'{i}}}'
+          )
+          replacement = replacement.replace('\\n', '\n')
+          s = s[:m.start()] + replacement + s[m.end():]
+
+          end = re.compile(r'(?m)^(?P<i>[ \t]*)MediaPlayer\.Event\.EndReached -> \{\n(?P=i)    clearABRepeat\(\)\n')
+          m = end.search(s)
+          if not m:
+              raise SystemExit('EndReached A-B clear not found')
+          i = m.group('i')
+          replacement = (
+              f'{i}MediaPlayer.Event.EndReached -> {{\n'
+              f'{i}    // Keep the saved A-B markers; they are restored per media by loadMediaMeta().\n'
+          )
+          s = s[:m.start()] + replacement + s[m.end():]
+
+          p.write_text(s)
+          PY
+
+          grep -n -A12 -B2 'META_AB_REPEAT_START' application/vlc-android/src/org/videolan/vlc/media/PlaylistManager.kt
+          grep -n -A5 'MediaPlayer.Event.EndReached' application/vlc-android/src/org/videolan/vlc/media/PlaylistManager.kt | head -20
+
+          git add application/vlc-android/src/org/videolan/vlc/media/PlaylistManager.kt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: persist A-B repeat markers per video'
+          git push origin HEAD:feature/persist-ab-repeat
+
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          git fetch origin feature/persist-ab-repeat
+          git reset --hard origin/feature/persist-ab-repeat
+          git rm .github/workflows/apply-ab-repeat-fix-v2.yml || true
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'chore: remove temporary A-B patch workflow'
+            git push origin HEAD:feature/persist-ab-repeat
+          fi
