@@ -1,0 +1,51 @@
+name: Fix VLC Android Build Config
+
+on:
+  push:
+    branches:
+      - feature/persist-ab-repeat
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: feature/persist-ab-repeat
+
+      - name: Patch native LibVLC dependency
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('application/vlc-android/build.gradle')
+          s = p.read_text()
+          old = "    devApi project(':libvlcjni:libvlc')\n    devApi project(':medialibrary')"
+          new = "    if (project.findProject(':libvlcjni:libvlc') != null) {\n        devApi project(':libvlcjni:libvlc')\n    }\n    devApi project(':medialibrary')"
+          if old not in s:
+              raise SystemExit('Expected LibVLC dependency block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          grep -n -A8 -B2 "project.findProject(':libvlcjni:libvlc')" application/vlc-android/build.gradle
+          git add application/vlc-android/build.gradle
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: guard optional native LibVLC project'
+          git push origin HEAD:feature/persist-ab-repeat
+
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          git fetch origin feature/persist-ab-repeat
+          git reset --hard origin/feature/persist-ab-repeat
+          git rm .github/workflows/fix-build-config.yml || true
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'chore: remove temporary build fix workflow'
+            git push origin HEAD:feature/persist-ab-repeat
+          fi
