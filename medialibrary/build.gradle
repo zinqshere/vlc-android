@@ -1,3 +1,77 @@
+/*
+ * *************************************************************************
+ *  build.gradle.java
+ * **************************************************************************
+ *  Copyright © 2015 VLC authors and VideoLAN
+ *  Author: Geoffrey Métais
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
+ *  ***************************************************************************
+ */
+apply plugin: 'com.android.library'
+apply plugin: "com.vanniktech.maven.publish"
+
+def abi = project.hasProperty('vlcLibVariant') ? project.getProperty('vlcLibVariant') : 'all'
+ext {
+    library_version = "$rootProject.ext.medialibraryVersion"
+}
+android {
+    namespace = 'org.videolan.medialibrary'
+
+    defaultConfig {
+        ndkVersion = rootProject.ext.toolchainNdkVersion
+        if (rootProject.ext.tooclchainNdkPath != null)
+            ndkPath = rootProject.ext.tooclchainNdkPath
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir 'jni/libs' // Where generated .so files are placed.
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = rootProject.ext.vlcMajorVersion == 4 ? ['src', 'vlc4/src'] : ['src', 'vlc3/src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets', 'libcompat/libs/armeabi']
+        }
+        test {
+            java.srcDirs = ['test']
+        }
+        androidTest {
+            java.srcDirs = ['androidTest']
+            assets.srcDirs += files("$projectDir/assets/schemas".toString())
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFile 'proguard.cfg'
+        }
+        dev {
+            initWith debug
+            matchingFallbacks = ['debug']
+        }
+    }
+
+    dataBinding {
+        enabled = true
+    }
+    buildFeatures {
+        renderScript = true
         aidl = true
     }
 
