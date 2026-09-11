@@ -757,7 +757,10 @@ class PlaylistManager(val service: PlaybackService) : MediaWrapperList.EventList
             } else if (settings.getBoolean(KEY_SAVE_INDIVIDUAL_AUDIO_DELAY, true)) {
                 player.setAudioDelay(savedDelay)
             }
-            val abStart = if (settings.getBoolean(PLAYBACK_HISTORY, true))  media.getMetaLong(MediaWrapper.META_AB_REPEAT_START) else 0L
+            // A-B repeat is stored per media. Reset the in-memory state first.
+            abRepeat.value = ABRepeat()
+            abRepeatOn.value = false
+            val abStart = if (settings.getBoolean(PLAYBACK_HISTORY, true)) media.getMetaLong(MediaWrapper.META_AB_REPEAT_START) else 0L
             if (abStart != 0L) {
                 abRepeatOn.value = true
                 val abStop = media.getMetaLong(MediaWrapper.META_AB_REPEAT_STOP)
@@ -1223,7 +1226,7 @@ class PlaylistManager(val service: PlaybackService) : MediaWrapperList.EventList
                     playingState.value = true
                 }
                 MediaPlayer.Event.EndReached -> {
-                    clearABRepeat()
+                    // Keep the saved A-B markers; they are restored per media by loadMediaMeta().
                     getCurrentMedia()?.addFlags(MediaWrapper.MEDIA_FROM_START)
                     if (currentIndex != nextIndex) {
                         endReachedFor = getCurrentMedia()?.uri.toString()
