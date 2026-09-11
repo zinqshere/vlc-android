@@ -18,10 +18,11 @@ android {
     buildToolsVersion = '36.0.0'
 }
 
-// The LibVLC source module is only required for Dev/native builds. Debug and
-// Release use the published LibVLC AAR, so do not register a missing native
-// project directory during normal application builds.
-if (file('libvlcjni/libvlc').isDirectory()) {
+// Normal Debug/Release builds consume the published LibVLC AAR. Only register
+// the native LibVLC project when explicitly requested for a source build and
+// when its source tree is actually present.
+def buildLibVlcFromSource = hasProperty('buildLibVlc') && getProperty('buildLibVlc').toBoolean()
+if (buildLibVlcFromSource && file('libvlcjni/libvlc').isDirectory()) {
     include ':libvlcjni:libvlc'
 }
 include ':medialibrary'
