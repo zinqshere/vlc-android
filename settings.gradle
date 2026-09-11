@@ -18,7 +18,13 @@ android {
     buildToolsVersion = '36.0.0'
 }
 
-include ':libvlcjni:libvlc', ':medialibrary'
+// The LibVLC source module is only required for Dev/native builds. Debug and
+// Release use the published LibVLC AAR, so do not register a missing native
+// project directory during normal application builds.
+if (file('libvlcjni/libvlc').isDirectory()) {
+    include ':libvlcjni:libvlc'
+}
+include ':medialibrary'
 include ':application:tools', ':application:resources', ':application:mediadb', ':application:app', ':application:live-plot-graph', ':application:television', ':application:donations', ':application:remote-access-server'
 include ':application:vlc-android'
 include ':application:moviepedia'
